@@ -1,13 +1,25 @@
-import { createClient } from '@/lib/supabase/client'
+// src/app/page.tsx
+'use client' // Add client directive
+import { useEffect, useState } from 'react'
+import { getSupabaseClient } from '@/lib/supabase/client'
+import type { Product } from '@/lib/database.types'
 
-export default async function Home() {
-  const supabase = createClient()
-  const { data: products } = await supabase.from('products').select('*')
+export default function Home() {
+  const [products, setProducts] = useState<Product[]>([])
+  const supabase = getSupabaseClient()
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      const { data } = await supabase.from('products').select('*')
+      setProducts(data || [])
+    }
+    loadProducts()
+  }, [supabase])
 
   return (
     <main className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Product List</h1>
-      {products?.map(product => (
+      {products.map(product => (
         <div key={product.id} className="p-4 border rounded mb-2">
           <h2>{product.name}</h2>
           <p>{product.description}</p>
