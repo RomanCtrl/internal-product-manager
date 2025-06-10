@@ -1,9 +1,11 @@
 export interface User {
     id: string
+    name: string
     email: string
-    full_name: string
+    city: string
+    zip: number
+    country: string
     role: string
-    department?: string
   }
   
   export interface Category {
