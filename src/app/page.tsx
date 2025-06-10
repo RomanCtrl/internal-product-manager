@@ -1,12 +1,12 @@
 // src/app/page.tsx
 'use client' // Add client directive
 import { useEffect, useState } from 'react'
-import { getSupabaseClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import type { Product } from '@/lib/database.types'
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([])
-  const supabase = getSupabaseClient()
+  const supabase = createClient()
 
   useEffect(() => {
     const loadProducts = async () => {
