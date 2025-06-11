@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getSupabaseClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 
 export default function LoginForm() {
   const [email, setEmail] = useState('')
@@ -10,7 +10,7 @@ export default function LoginForm() {
   const [error, setError] = useState('')
   
   const router = useRouter()
-  const supabase = getSupabaseClient()
+  const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

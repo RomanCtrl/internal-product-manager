@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export function createClient(request: NextRequest) {
+export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -16,7 +16,7 @@ export function createClient(request: NextRequest) {
         get(name: string) {
           return request.cookies.get(name)?.value
         },
-        set(name: string, value: string, options: any) {
+        set(name: string, value: string, options: CookieOptions) {
           request.cookies.set({
             name,
             value,
@@ -33,7 +33,7 @@ export function createClient(request: NextRequest) {
             ...options,
           })
         },
-        remove(name: string, options: any) {
+        remove(name: string, options: CookieOptions) {
           request.cookies.set({
             name,
             value: '',
@@ -54,5 +54,30 @@ export function createClient(request: NextRequest) {
     }
   )
 
-  return { supabase, response }
+  // Refresh session if expired
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Define protected routes
+  const protectedRoutes = ['/dashboard', '/products', '/cart', '/orders']
+  const authRoutes = ['/login', '/register', '/auth']
+  
+  const isProtectedRoute = protectedRoutes.some(route => 
+    request.nextUrl.pathname.startsWith(route)
+  )
+  
+  const isAuthRoute = authRoutes.some(route => 
+    request.nextUrl.pathname.startsWith(route)
+  )
+
+  // Redirect to login if accessing protected route without authentication
+  if (isProtectedRoute && !user) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Redirect to products if accessing auth pages while logged in
+  if (isAuthRoute && user) {
+    return NextResponse.redirect(new URL('/products', request.url))
+  }
+
+  return response
 }
