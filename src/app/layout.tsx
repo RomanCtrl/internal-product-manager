@@ -1,4 +1,4 @@
-// src/app/layout.tsx
+//src/app/layout.tsx
 import { Inter } from 'next/font/google'
 import { createClient } from '@/lib/supabase/server'
 import { AuthProvider } from '@/components/AuthProvider'

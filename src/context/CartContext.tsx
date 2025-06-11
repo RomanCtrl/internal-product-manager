@@ -2,7 +2,7 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/components/AuthProvider';
 
 export interface CartItem {
   id: string;
