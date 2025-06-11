@@ -83,38 +83,6 @@ export type Database = {
           },
         ]
       }
-      categories: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          id: string
-          name: string
-          parent_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          name: string
-          parent_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          name?: string
-          parent_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "categories_parent_id_fkey"
-            columns: ["parent_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       order_items: {
         Row: {
           id: string
@@ -216,69 +184,36 @@ export type Database = {
       }
       products: {
         Row: {
-          category_id: string | null
-          cost: number | null
-          created_at: string | null
-          created_by: string | null
           description: string | null
           id: string
           image_url: string | null
-          min_stock_level: number | null
           name: string
           price: number
-          sku: string
-          status: string | null
+          sku: number
+          step: number | null
           stock_quantity: number | null
-          updated_at: string | null
         }
         Insert: {
-          category_id?: string | null
-          cost?: number | null
-          created_at?: string | null
-          created_by?: string | null
           description?: string | null
           id?: string
           image_url?: string | null
-          min_stock_level?: number | null
           name: string
           price: number
-          sku: string
-          status?: string | null
+          sku: number
+          step?: number | null
           stock_quantity?: number | null
-          updated_at?: string | null
         }
         Update: {
-          category_id?: string | null
-          cost?: number | null
-          created_at?: string | null
-          created_by?: string | null
           description?: string | null
           id?: string
           image_url?: string | null
-          min_stock_level?: number | null
           name?: string
           price?: number
-          sku?: string
-          status?: string | null
+          sku?: number
+          step?: number | null
           stock_quantity?: number | null
-          updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "products_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       users: {
         Row: {
@@ -436,6 +371,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
-
-export type Product = Database['public']['Tables']['products']['Row']
