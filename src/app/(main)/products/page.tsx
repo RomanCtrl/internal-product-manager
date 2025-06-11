@@ -3,7 +3,17 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Product } from '@/lib/database.types'
-import ProductCard from '@/components/ProductCard'
+
+// Local ProductCard implementation
+function ProductCard({ product }: { product: Product }) {
+  return (
+    <div className="border rounded-lg p-4">
+      <h2 className="font-bold">{product.name}</h2>
+      <p>{product.description}</p>
+      <div className="mt-2 font-semibold">${product.price}</div>
+    </div>
+  )
+}
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
@@ -56,10 +66,11 @@ export default function ProductsPage() {
         </div>
       )}
 
+
       {!loading && !error && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {products.map(product => (
-            <ProductCard key={product.product_id} product={product} />
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
       )}

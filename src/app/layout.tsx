@@ -1,26 +1,26 @@
-// src/app/layout.tsx
-import { Inter } from 'next/font/google'
+// src/app/(main)/layout.tsx
 import { createClient } from '@/lib/supabase/server'
-import { AuthProvider } from '@/components/AuthProvider'
-import './globals.css'
+import { redirect } from 'next/navigation'
+import Navbar from '@/components/Navbar'
 
-const inter = Inter({ subsets: ['latin'] })
-
-export default async function RootLayout({
+export default async function MainLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user }, error } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    redirect('/login')
+  }
 
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <AuthProvider initialUser={user}>
-          {children}
-        </AuthProvider>
-      </body>
-    </html>
+    <div className="min-h-screen bg-gray-50">
+      <Navbar user={user} />
+      <main className="pt-16"> {/* Account for fixed navbar height */}
+        {children}
+      </main>
+    </div>
   )
 }

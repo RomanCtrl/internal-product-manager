@@ -55,3 +55,8 @@ export const useAuth = () => {
   }
   return context
 }
+
+export function AuthConsumer({ children }: { children: (context: AuthContextType) => React.ReactNode }) {
+    const context = useAuth()
+    return <>{children(context)}</>
+  }
