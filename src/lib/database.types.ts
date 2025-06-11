@@ -371,3 +371,6 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
+
+export type Product = Database['public']['Tables']['products']['Row']
