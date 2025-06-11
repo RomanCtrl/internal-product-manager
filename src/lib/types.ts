@@ -20,14 +20,10 @@ export interface User {
     sku: string
     name: string
     description?: string
-    category_id?: string
     price: number
-    cost?: number
     stock_quantity: number
-    min_stock_level: number
-    status: string
     image_url?: string
-    created_by?: string
+    step?: number
   }
   
   export interface CartItem {

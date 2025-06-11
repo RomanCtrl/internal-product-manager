@@ -1,22 +1,16 @@
+// src/app/(main)/products/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Product } from '@/lib/types' // Use your shared Product type
+import type { Product } from '@/lib/database.types'
 
+// Local ProductCard implementation
 function ProductCard({ product }: { product: Product }) {
   return (
     <div className="border rounded-lg p-4">
-      {product.image_url && (
-        <img src={product.image_url} alt={product.name} className="mb-2 w-full h-40 object-cover rounded" />
-      )}
       <h2 className="font-bold">{product.name}</h2>
-      <p className="text-sm text-gray-600">{product.description}</p>
+      <p>{product.description}</p>
       <div className="mt-2 font-semibold">${product.price}</div>
-      <div className="text-xs text-gray-500">SKU: {product.sku}</div>
-      <div className="text-xs text-gray-500">Stock: {product.stock_quantity}</div>
-      {product.step !== undefined && (
-        <div className="text-xs text-gray-500">Step: {product.step}</div>
-      )}
     </div>
   )
 }
@@ -34,7 +28,9 @@ export default function ProductsPage() {
         setError(null)
         const { data, error } = await supabase
           .from('products')
-          .select('id, sku, name, description, price, stock_quantity, image_url, step')
+          .select('*')
+          .order('product_name')
+        
         if (error) throw error
         setProducts(data || [])
       } catch (err) {
@@ -69,6 +65,7 @@ export default function ProductsPage() {
           <p className="text-red-800">Error: {error}</p>
         </div>
       )}
+
 
       {!loading && !error && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
