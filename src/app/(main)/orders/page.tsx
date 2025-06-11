@@ -11,10 +11,12 @@ interface Order {
   total_amount: number
   order_date: string
   order_items: Array<{
-    product_name: string
     quantity: number
     unit_price: number
     total_price: number
+    products: {
+      product_name: string
+    } | null
   }>
 }
 
