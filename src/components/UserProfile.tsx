@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { User } from 'lucide-react'
+import Link from 'next/link'
+import { LogOut } from 'lucide-react'
 
 interface UserProfileProps {
   user: any
@@ -22,7 +24,7 @@ export function UserProfile({ user, onSignOut }: UserProfileProps) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, full_name, avatar_url')
+        .select('name, email')
         .eq('id', user.id)
         .single()
 
