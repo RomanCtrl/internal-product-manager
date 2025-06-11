@@ -76,12 +76,6 @@ export default function Navbar({ user }: NavbarProps) {
             >
               Orders
             </Link>
-            <Link 
-              href="/inventory" 
-              className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-            >
-              Inventory
-            </Link>
           </div>
 
           {/* Right Side Actions */}
@@ -131,13 +125,6 @@ export default function Navbar({ user }: NavbarProps) {
                 onClick={() => setIsMenuOpen(false)}
               >
                 Orders
-              </Link>
-              <Link 
-                href="/inventory" 
-                className="block px-3 py-2 text-gray-700 hover:text-blue-600 rounded-md"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Inventory
               </Link>
               <Link 
                 href="/cart" 
