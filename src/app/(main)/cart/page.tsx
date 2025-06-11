@@ -5,7 +5,7 @@ import { Package, AlertTriangle, TrendingDown, TrendingUp, Search } from 'lucide
 
 interface InventoryItem {
   product_id: string
-  product_name: string
+  name: string
   total_inventory: number
   min_stock_level: number
   max_stock_level: number
@@ -37,7 +37,7 @@ export default function InventoryPage() {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .order('product_name')
+        .order('name')
 
       if (error) throw error
       setInventory(data || [])
@@ -54,7 +54,7 @@ export default function InventoryPage() {
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(item =>
-        item.product_name.toLowerCase().includes(searchTerm.toLowerCase())
+        item.name.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
 
