@@ -17,88 +17,80 @@ export function AuthProvider({
   initialUser 
 }: { 
   children: React.ReactNode
-  initialUser: User | null 
+  initialUser: User | null
 }) {
-  const [user, setUser] = useState<User | null>(initialUser)
-  const [loading, setLoading] = useState(false)
-  const supabase = createClient()
+  const [user, setUser] = useState<User | null>(initialUser);
+  const [loading, setLoading] = useState(true); // Initialize loading state to true
+  const supabase = createClient();
 
   useEffect(() => {
-    // Initially set loading to true until the first auth state check completes
-    setLoading(true);
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => { // Make callback async
-        setLoading(true); // Set loading true at the start of handling any auth event
-        const currentUser = session?.user ?? null;
+    // setLoading(true) removed from here; initial state is true.
+    // onAuthStateChange will manage loading from this point.
 
-        if (currentUser) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setLoading(true); // Ensure loading is true during this async handler
+        let effectiveUser = session?.user ?? null;
+
+        if (effectiveUser) {
           try {
             // Attempt to ensure profile exists
             const { data: profile, error: fetchError } = await supabase
               .from('users') // public.users table
               .select('id')
-              .eq('id', currentUser.id)
+              .eq('id', effectiveUser.id)
               .maybeSingle();
 
             if (fetchError) {
                 console.error('Error fetching user profile:', JSON.stringify(fetchError, null, 2));
-                // Potentially don't set user or set an error state if profile is critical
-                // For now, we proceed to set user, but this error might affect functionality
+                // If fetching profile fails, we might not want to proceed with this user session
+                // depending on how critical the profile is. For now, we log and let it try to create.
+                // If profile is absolutely critical, effectiveUser could be nulled here too.
             }
 
             if (!profile && !fetchError) { // Only insert if no profile and no error fetching
-              console.log(`No profile found for user ${currentUser.id}, creating one.`);
+              console.log(`No profile found for user ${effectiveUser.id}, creating one.`);
               const { error: insertError } = await supabase
                 .from('users') // public.users table
                 .insert({
-                  id: currentUser.id,
-                  email: currentUser.email,
+                  id: effectiveUser.id,
+                  email: effectiveUser.email,
                   // Assuming 'user' is a valid default role and 'role' column exists
                   // and allows this value or has a database-level default.
                   role: 'user'
                 });
 
               if (insertError) {
-                console.error('Error creating user profile:', JSON.stringify(insertError, null, 2));
-                // This is a critical failure. How to handle?
-                // Option 1: Set user to null / show error / prevent login completion.
-                // Option 2: Set user, but some parts of app might fail (like cart).
-                // For now, we'll log and proceed to set user, but this error needs attention.
-                // Consider a global error state or specific retry logic if this is common.
+                console.error('CRITICAL: Error creating user profile:', JSON.stringify(insertError, null, 2));
+                effectiveUser = null; // Nullify user if profile creation fails
               } else {
-                console.log('User profile created successfully for:', currentUser.id);
+                console.log('User profile created successfully for:', effectiveUser.id);
               }
             } else if (profile) {
-              console.log('User profile already exists for:', currentUser.id);
+              console.log('User profile already exists for:', effectiveUser.id);
             }
           } catch (e) {
               console.error("Unexpected error in profile ensure process:", JSON.stringify(e, null, 2));
+              effectiveUser = null; // Nullify user on unexpected error too
           }
         }
 
-        setUser(currentUser);
+        setUser(effectiveUser); // Set the potentially nulled user
         setLoading(false);
       }
     );
 
     // Initial check in case the event listener doesn't fire immediately
     // (e.g., if user is already logged in when the provider mounts)
-    // This part is tricky because onAuthStateChange usually fires on mount.
-    // For simplicity, we'll rely on onAuthStateChange to set initial loading to false.
-    // If initialUser is passed, loading is false from the start, which is fine.
-    if (!initialUser) {
-        // If there's no initial user (SSR), we ensure loading is true until first check.
-        // The onAuthStateChange will set it to false.
-    } else {
-        // If initialUser is provided, we assume it's valid and profile exists.
-        // Or, the onAuthStateChange will fire for this user too and verify.
-        // For now, set loading to false if initialUser is present.
-        setLoading(false);
-    }
+    // onAuthStateChange usually fires on mount for already logged-in users.
+    // The initial useState(true) covers the very first load.
+    // No direct setLoading(false) based on initialUser here;
+    // onAuthStateChange is the authority for setting loading to false.
 
-
-    return () => subscription.unsubscribe();
-  }, [supabase])
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase]); // supabase client instance is the main dependency
 
   const signOut = async () => {
     setLoading(true);
@@ -107,11 +99,27 @@ export function AuthProvider({
     // setLoading(false); // onAuthStateChange will set loading to false
   };
 
+  if (loading) {
+    // This is a simple placeholder. A real app would have a dedicated loading component/spinner.
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        fontSize: '1.2rem',
+        fontFamily: 'sans-serif'
+      }}>
+        Authenticating...
+      </div>
+    );
+  }
+
   return (
     <AuthContext.Provider value={{ user, loading, signOut }}>
       {children}
     </AuthContext.Provider>
-  )
+  );
 }
 
 export const useAuth = () => {
