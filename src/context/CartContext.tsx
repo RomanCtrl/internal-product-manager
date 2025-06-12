@@ -46,7 +46,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       .single();
 
     if (cartError && cartError.code !== 'PGRST116') {
-      console.error('Error fetching cart:', cartError);
+      console.error('Error fetching cart:', JSON.stringify(cartError, null, 2));
       return null;
     }
     if (cartData) return cartData.id;
@@ -58,7 +58,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       .single();
 
     if (newCartError) {
-      console.error('Error creating cart:', newCartError);
+      console.error('Error creating new cart:', JSON.stringify(newCartError, null, 2));
       return null;
     }
     return newCartData ? newCartData.id : null;
@@ -169,12 +169,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addToCart = async (product: Database['public']['Tables']['products']['Row'], quantity: number = 1) => {
     if (!user || !cartId) {
-        console.error("User or cartId not available for addToCart");
-        if (user && !cartId) {
-            const newCartId = await getOrCreateCartId(user.id);
-            if (newCartId) setCartId(newCartId);
-            console.log("CartId was missing, attempted to re-create. Please try adding item again.");
-        }
+        console.error("Attempted to addToCart when user or cartId is not available. User:", !!user, "CartId:", !!cartId, "Context loading:", loading);
+        // alert("Cart not ready. Please wait a moment and try again."); // Optional
         return;
     }
     if (!product || !product.id || typeof product.price !== 'number') {
@@ -210,7 +206,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateQuantity = async (cartItemId: string, quantity: number) => {
-    if (!user || !cartId || quantity < 1) return;
+    if (!user || !cartId || quantity < 1) {
+      console.error("Attempted to updateQuantity when user or cartId is not available, or quantity invalid. User:", !!user, "CartId:", !!cartId, "Quantity:", quantity, "Context loading:", loading);
+      return;
+    }
     try {
       await supabase
         .from('cart_items')
@@ -223,7 +222,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeFromCart = async (cartItemId: string) => {
-    if (!user || !cartId) return;
+    if (!user || !cartId) {
+      console.error("Attempted to removeFromCart when user or cartId is not available. User:", !!user, "CartId:", !!cartId, "Context loading:", loading);
+      return;
+    }
     try {
       await supabase
         .from('cart_items')
@@ -237,8 +239,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = async () => {
     if (!user || !cartId) {
-        console.log("User or cartId not available for clearCart. Cart might be already clear or user logged out.");
-        setItems([]); // Ensure UI reflects empty state
+        console.error("Attempted to clearCart when user or cartId is not available. User:", !!user, "CartId:", !!cartId, "Context loading:", loading);
         return;
     }
     try {
@@ -266,8 +267,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const createOrderFromCart = async (): Promise<string | null> => {
     if (!user || !cartId || items.length === 0) {
-      console.error("User not logged in, cartId missing, or cart is empty.");
-      alert("Cannot create order: Cart is empty or user not fully logged in.");
+      console.error("Attempted to createOrderFromCart with missing prerequisites. User:", !!user, "CartId:", !!cartId, "Items count:", items.length, "Context loading:", loading);
+      alert("Cannot create order: Cart is empty or user not fully logged in. If you recently logged in, please wait a moment.");
       return null;
     }
 
