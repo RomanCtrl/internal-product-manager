@@ -37,32 +37,64 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
   const [cartId, setCartId] = useState<string | null>(null);
 
-  const getOrCreateCartId = async (userId: string): Promise<string | null> => {
-    let { data: cartData, error: cartError } = await supabase
-      .from('carts')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .single();
+const getOrCreateCartId = async (userId: string): Promise<string | null> => {
+  // Try to fetch an existing active cart.
+  // With the unique DB constraint, .single() is safer here.
+  let { data: cartData, error: cartError } = await supabase
+    .from('carts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .single();
 
-    if (cartError && cartError.code !== 'PGRST116') {
-      console.error('Error fetching cart:', JSON.stringify(cartError, null, 2));
-      return null;
-    }
-    if (cartData) return cartData.id;
+  if (cartData) {
+    return cartData.id;
+  }
 
-    const { data: newCartData, error: newCartError } = await supabase
-      .from('carts')
-      .insert({ user_id: userId, status: 'active' })
-      .select('id')
-      .single();
+  // Handle specific errors or proceed to insert
+  // PGRST116 = 0 rows found, which is expected if no active cart exists.
+  if (cartError && cartError.code !== 'PGRST116') {
+    console.error('Error fetching cart initially:', JSON.stringify(cartError, null, 2));
+    // For other errors (e.g., network, RLS issues not allowing select), return null.
+    return null;
+  }
 
-    if (newCartError) {
+  // If cartError.code === 'PGRST116' (no active cart found), try to insert.
+  const { data: newCartData, error: newCartError } = await supabase
+    .from('carts')
+    .insert({ user_id: userId, status: 'active' })
+    .select('id')
+    .single(); // Attempt to get the newly inserted cart's ID.
+
+  if (newCartError) {
+    // Check if the error is due to the unique constraint (23505: unique_violation in PostgreSQL)
+    // This means a concurrent operation just created the cart.
+    if (newCartError.code === '23505') {
+      console.log('Unique constraint violation on cart insert, re-fetching active cart as it was likely created concurrently.');
+      // Retry fetching the (now existing) active cart
+      let { data: existingCartData, error: retryFetchError } = await supabase
+        .from('carts')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .single(); // Should find the cart created by the other process.
+
+      if (retryFetchError) {
+        console.error('Error re-fetching cart after unique constraint violation:', JSON.stringify(retryFetchError, null, 2));
+        return null;
+      }
+      // Return the ID of the cart found after the retry.
+      return existingCartData ? existingCartData.id : null;
+    } else {
+      // For other insert errors, log them and return null.
       console.error('Error creating new cart:', JSON.stringify(newCartError, null, 2));
       return null;
     }
-    return newCartData ? newCartData.id : null;
-  };
+  }
+
+  // Return the ID of the newly created cart if insert was successful.
+  return newCartData ? newCartData.id : null;
+};
 
   useEffect(() => {
     const initializeCart = async () => {
