@@ -146,7 +146,7 @@ export default function Navbar({ user }: NavbarProps) {
                   <p className="text-sm font-medium text-gray-900">{user?.email}</p>
                 </div>
                 <Link 
-                  href="/profile" 
+                  href="/account/settings"
                   className="block px-3 py-2 text-gray-700 hover:text-blue-600 rounded-md"
                   onClick={() => setIsMenuOpen(false)}
                 >
