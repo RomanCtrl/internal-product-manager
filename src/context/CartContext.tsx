@@ -3,197 +3,367 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
+import type { Database } from '@/lib/database.types'; // Import Database types
 
+// Define the CartItem interface based on joined data
 export interface CartItem {
-  id: string;
+  id: string; // cart_items.id
   product_id: string;
-  product_name: string;
-  price: number;
   quantity: number;
-  image?: string;
+  price_at_time_in_cart: number; // from cart_items.price_at_time
+  product_name: string;    // from joined products table
+  product_image?: string; // from joined products table
 }
 
 interface CartContextType {
   items: CartItem[];
   loading: boolean;
-  addToCart: (product: any, quantity: number) => Promise<void>;
-  updateQuantity: (itemId: string, quantity: number) => Promise<void>;
-  removeFromCart: (itemId: string) => Promise<void>;
+  addToCart: (product: Database['public']['Tables']['products']['Row'], quantity: number) => Promise<void>;
+  updateQuantity: (cartItemId: string, quantity: number) => Promise<void>;
+  removeFromCart: (cartItemId: string) => Promise<void>;
   clearCart: () => Promise<void>;
   cartTotal: number;
   itemCount: number;
+  createOrderFromCart: () => Promise<string | null>; // New function
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // General loading state
+  const [checkoutLoading, setCheckoutLoading] = useState(false); // Specific loading state for checkout
   const { user } = useAuth();
   const supabase = createClient();
+  const [cartId, setCartId] = useState<string | null>(null);
 
-  const fetchCartItems = async () => {
-    if (!user) {
+  const getOrCreateCartId = async (userId: string): Promise<string | null> => {
+    let { data: cartData, error: cartError } = await supabase
+      .from('carts')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .single();
+
+    if (cartError && cartError.code !== 'PGRST116') {
+      console.error('Error fetching cart:', JSON.stringify(cartError, null, 2));
+      return null;
+    }
+    if (cartData) return cartData.id;
+
+    const { data: newCartData, error: newCartError } = await supabase
+      .from('carts')
+      .insert({ user_id: userId, status: 'active' })
+      .select('id')
+      .single();
+
+    if (newCartError) {
+      console.error('Error creating new cart:', JSON.stringify(newCartError, null, 2));
+      return null;
+    }
+    return newCartData ? newCartData.id : null;
+  };
+
+  useEffect(() => {
+    const initializeCart = async () => {
+      if (user) {
+        setLoading(true);
+        const currentCartId = await getOrCreateCartId(user.id);
+        setCartId(currentCartId);
+        if (currentCartId) {
+          await fetchCartItems(currentCartId);
+        } else {
+          setItems([]);
+        }
+        setLoading(false);
+      } else {
+        setItems([]);
+        setCartId(null);
+        setLoading(false);
+      }
+    };
+    initializeCart();
+  }, [user]);
+
+  const fetchCartItems = async (currentCartId: string | null) => {
+    if (!user || !currentCartId) {
       setItems([]);
-      setLoading(false);
+      // setLoading(false); // This might be set by initializeCart
       return;
     }
 
+    // setLoading(true); // Potentially set by caller
     try {
-      setLoading(true);
-      const { data, error } = await supabase
+      const { data: cartItemsData, error } = await supabase
         .from('cart_items')
-        .select('*');
+        .select(`
+          id,
+          quantity,
+          price_at_time,
+          product_id,
+          products (
+            name,
+            image_url,
+            price
+          )
+        `)
+        .eq('cart_id', currentCartId);
 
       if (error) {
-        console.error('Error fetching cart items: Code:', error.code, 'Message:', error.message, 'Details:', error.details, 'Hint:', error.hint, 'Full Error:', JSON.stringify(error, null, 2));
+        console.error('Error fetching cart items:', error);
+        setItems([]);
       } else {
-        setItems(data || []);
+        const transformedItems: CartItem[] = cartItemsData?.map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price_at_time_in_cart: item.price_at_time,
+          product_name: item.products?.name || 'Unknown Product',
+          product_image: item.products?.image_url || undefined,
+        })) || [];
+        setItems(transformedItems);
       }
-    } catch (error) {
-      console.error('Unexpected error:', error);
+    } catch (err) {
+      console.error('Unexpected error fetching cart items:', err);
+      setItems([]);
     } finally {
-      setLoading(false);
+      // setLoading(false); // Potentially set by caller
     }
   };
 
   useEffect(() => {
-    fetchCartItems();
-    
-    // Listen for real-time updates to cart
-    if (user) {
-      const channel = supabase
-        .channel('cart_changes')
+    if (user && cartId) {
+      fetchCartItems(cartId); // Initial fetch
+
+      const cartItemsChannel = supabase
+        .channel(`cart_items_changes_for_cart_${cartId}`)
         .on(
           'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'cart_items',
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            fetchCartItems();
+          { event: '*', schema: 'public', table: 'cart_items', filter: `cart_id=eq.${cartId}` },
+          (payload) => {
+            console.log('Cart items change received!', payload);
+            fetchCartItems(cartId);
           }
-        )
-        .subscribe();
+        ).subscribe();
+
+      const cartStatusChannel = supabase
+        .channel(`cart_status_changes_for_cart_${cartId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'carts', filter: `id=eq.${cartId}` },
+          (payload) => {
+            console.log('Cart status change received!', payload);
+            if (payload.eventType === 'DELETE' || (payload.eventType === 'UPDATE' && payload.new.status !== 'active')) {
+              setCartId(null);
+              setItems([]);
+            }
+          }
+        ).subscribe();
 
       return () => {
-        supabase.removeChannel(channel);
+        supabase.removeChannel(cartItemsChannel);
+        supabase.removeChannel(cartStatusChannel);
       };
     }
-  }, [user, supabase]);
+  }, [user, cartId, supabase]);
 
-  // Add item to cart
-  const addToCart = async (product: any, quantity: number = 1) => {
-    if (!user) return;
+  const addToCart = async (product: Database['public']['Tables']['products']['Row'], quantity: number = 1) => {
+    if (!user || !cartId) {
+        console.error("Attempted to addToCart when user or cartId is not available. User:", !!user, "CartId:", !!cartId, "Context loading:", loading);
+        // alert("Cart not ready. Please wait a moment and try again."); // Optional
+        return;
+    }
+    if (!product || !product.id || typeof product.price !== 'number') {
+        console.error("Invalid product data for addToCart", product);
+        return;
+    }
 
     try {
-      // Check if product already exists in cart
-      const existingItem = items.find(item => item.product_id === product.product_id);
+      const { data: existingItems, error: findError } = await supabase
+        .from('cart_items')
+        .select('id, quantity')
+        .eq('cart_id', cartId)
+        .eq('product_id', product.id)
+        .limit(1);
+
+      if (findError) throw findError;
+
+      const existingItem = existingItems?.[0];
 
       if (existingItem) {
-        // Update quantity if item exists
         await updateQuantity(existingItem.id, existingItem.quantity + quantity);
       } else {
-        // Add new item
-        const { error } = await supabase.from('cart_items').insert({
-          user_id: user.id,
-          product_id: product.product_id,
-          product_name: product.product_name,
-          price: product.price,
+        await supabase.from('cart_items').insert({
+          cart_id: cartId,
+          product_id: product.id,
           quantity: quantity,
-          image: product.image,
-        });
-
-        if (error) {
-          console.error('Error adding item to cart:', error);
-        }
+          price_at_time: product.price,
+        }).select().single(); // Adding select().single() can help catch insert errors better
       }
-    } catch (error) {
-      console.error('Unexpected error:', error);
+    } catch (err) {
+      console.error('Error in addToCart:', err);
     }
   };
 
-  // Update quantity of item in cart
-  const updateQuantity = async (itemId: string, quantity: number) => {
-    if (!user || quantity < 1) return;
-
+  const updateQuantity = async (cartItemId: string, quantity: number) => {
+    if (!user || !cartId || quantity < 1) {
+      console.error("Attempted to updateQuantity when user or cartId is not available, or quantity invalid. User:", !!user, "CartId:", !!cartId, "Quantity:", quantity, "Context loading:", loading);
+      return;
+    }
     try {
-      const { error } = await supabase
+      await supabase
         .from('cart_items')
         .update({ quantity, updated_at: new Date().toISOString() })
-        .eq('id', itemId)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error updating cart item:', error);
-      }
-    } catch (error) {
-      console.error('Unexpected error:', error);
+        .eq('id', cartItemId)
+        .eq('cart_id', cartId);
+    } catch (err) {
+      console.error('Error in updateQuantity:', err);
     }
   };
 
-  // Remove item from cart
-  const removeFromCart = async (itemId: string) => {
-    if (!user) return;
-
+  const removeFromCart = async (cartItemId: string) => {
+    if (!user || !cartId) {
+      console.error("Attempted to removeFromCart when user or cartId is not available. User:", !!user, "CartId:", !!cartId, "Context loading:", loading);
+      return;
+    }
     try {
-      const { error } = await supabase
+      await supabase
         .from('cart_items')
         .delete()
-        .eq('id', itemId)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error removing item from cart:', error);
-      }
-    } catch (error) {
-      console.error('Unexpected error:', error);
+        .eq('id', cartItemId)
+        .eq('cart_id', cartId);
+    } catch (err) {
+      console.error('Error in removeFromCart:', err);
     }
   };
 
-  // Clear all items from cart
   const clearCart = async () => {
-    if (!user) return;
-
+    if (!user || !cartId) {
+        console.error("Attempted to clearCart when user or cartId is not available. User:", !!user, "CartId:", !!cartId, "Context loading:", loading);
+        return;
+    }
     try {
       const { error } = await supabase
         .from('cart_items')
         .delete()
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('Error clearing cart:', error);
-      }
-    } catch (error) {
-      console.error('Unexpected error:', error);
+        .eq('cart_id', cartId);
+      if (error) throw error;
+      // Realtime should update items, but we can also clear it preemptively
+      // setItems([]); // This is handled by the realtime subscription calling fetchCartItems
+    } catch (err) {
+      console.error('Error in clearCart:', err);
     }
   };
 
-  // Calculate cart total
   const cartTotal = items.reduce(
-    (total, item) => total + item.price * item.quantity,
+    (total, item) => total + item.price_at_time_in_cart * item.quantity,
     0
   );
 
-  // Calculate total item count
   const itemCount = items.reduce(
     (count, item) => count + item.quantity,
     0
   );
 
+  const createOrderFromCart = async (): Promise<string | null> => {
+    if (!user || !cartId || items.length === 0) {
+      console.error("Attempted to createOrderFromCart with missing prerequisites. User:", !!user, "CartId:", !!cartId, "Items count:", items.length, "Context loading:", loading);
+      alert("Cannot create order: Cart is empty or user not fully logged in. If you recently logged in, please wait a moment.");
+      return null;
+    }
+
+    setCheckoutLoading(true);
+    try {
+      const order_number = `ORD-${Date.now()}`;
+      // cartTotal is already calculated and available in the scope
+
+      // 1. Create Order
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          user_id: user.id,
+          cart_id: cartId, // Store the cart_id with the order
+          order_number,
+          total_amount: cartTotal,
+          status: 'pending', // Initial status
+          // created_at will be set by default by postgres
+        })
+        .select('id')
+        .single();
+
+      if (orderError || !orderData) {
+        console.error('Error creating order:', orderError);
+        alert(`Error creating order: ${orderError?.message || "Unknown error"}`);
+        throw orderError || new Error("Order creation failed at 'orders' table insertion");
+      }
+      const newOrderId = orderData.id;
+
+      // 2. Create Order Items
+      const orderItemsToInsert = items.map(item => ({
+        order_id: newOrderId,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.price_at_time_in_cart,
+        total_price: item.quantity * item.price_at_time_in_cart,
+      }));
+
+      const { error: orderItemsError } = await supabase
+        .from('order_items')
+        .insert(orderItemsToInsert);
+
+      if (orderItemsError) {
+        console.error('Error creating order items:', orderItemsError);
+        // Attempt to delete the order if items failed, to prevent orphaned orders
+        await supabase.from('orders').delete().eq('id', newOrderId);
+        alert(`Error creating order items: ${orderItemsError.message}. Order has been rolled back.`);
+        throw orderItemsError;
+      }
+
+      // 3. Optionally, update cart status to 'completed' or similar, instead of just clearing.
+      // For now, we will clear it as per original plan.
+      // Important: clearCart will trigger a fetchCartItems which will find nothing.
+      await clearCart();
+      // After clearing, we might want to set cartId to null or re-evaluate,
+      // but clearCart currently just deletes items.
+      // To prevent the old cartId from being reused immediately for a new cart
+      // before the user does anything, we could set its status to 'completed'.
+      const { error: updateCartError } = await supabase
+        .from('carts')
+        .update({ status: 'completed', updated_at: new Date().toISOString() })
+        .eq('id', cartId);
+
+      if (updateCartError) {
+        console.error('Error updating cart status to completed:', updateCartError);
+        // This is not a fatal error for the order itself, but good to log.
+      }
+      setCartId(null); // User will get a new cart next time they add an item.
+
+      return newOrderId;
+    } catch (error) {
+      console.error("Checkout process failed:", error);
+      // Alert is handled by specific error messages above for better UX
+      // If it's an unexpected error, this will catch it.
+      if (!(error instanceof Error && error.message.includes("Order creation failed") || error.message.includes("Error creating order items"))) {
+        alert("An unexpected error occurred during checkout. Please try again.");
+      }
+      return null;
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   return (
     <CartContext.Provider
       value={{
         items,
-        loading,
+        loading: loading || checkoutLoading, // Combine loading states for general UI feedback
         addToCart,
         updateQuantity,
         removeFromCart,
         clearCart,
         cartTotal,
         itemCount,
+        createOrderFromCart, // Provide the new function
       }}
     >
       {children}

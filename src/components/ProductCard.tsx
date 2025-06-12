@@ -1,22 +1,18 @@
 'use client'
 import { useState } from 'react'; // Import useState
 import type { Product } from '@/lib/database.types'; // Use your shared Product type
+// Product is equivalent to Database['public']['Tables']['products']['Row']
 import { useCart } from '@/context/CartContext';
 
 export default function ProductCard({ product }: { product: Product }) {
-  const { addToCart } = useCart();
+  // Destructure loading state from useCart, aliasing to isCartLoading
+  const { addToCart, loading: isCartLoading } = useCart();
   // Initialize quantity state with product.step or 1
   const [quantity, setQuantity] = useState(product.step || 1);
 
   const handleAddToCart = () => {
-    const cartProduct = {
-      product_id: product.id,
-      product_name: product.name,
-      price: product.price,
-      image: product.image_url, // Ensure product.image_url can be undefined if that's the case
-    };
-    // Use the quantity from state
-    addToCart(cartProduct, quantity);
+    // Pass the full 'product' object, as addToCart expects Database['public']['Tables']['products']['Row']
+    addToCart(product, quantity);
     // Optionally, add some user feedback here, like a console.log or a toast notification
     console.log(`${quantity} of ${product.name} added to cart`);
   };
@@ -71,9 +67,10 @@ export default function ProductCard({ product }: { product: Product }) {
       </div>
       <button
         onClick={handleAddToCart}
-        className="mt-4 w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors"
+        className={`mt-4 w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors ${isCartLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+        disabled={isCartLoading}
       >
-        Add to Cart
+        {isCartLoading ? 'Initializing Cart...' : 'Add to Cart'}
       </button>
     </div>
   )
