@@ -32,22 +32,25 @@ export default function CompleteProfilePage() {
       return
     }
 
-    const { error: insertError } = await supabase
+    // Using upsert instead of insert
+    const { error: upsertError } = await supabase
       .from('users')
-      .insert([{
-        id: user.id,
+      .upsert({ // Pass a single object or an array of objects
+        id: user.id, // This is the primary key Supabase uses for upsert
         email: user.email,
         name: name,
         city: city || null,
         country: country || null,
         zip: zip || null,
-        role: 'user', // Default role
-      }])
+        role: 'user', // Default role, will be applied on insert or update
+      }, {
+        onConflict: 'id' // Specify the conflict target (usually the primary key)
+      });
 
-    if (insertError) {
-      alert(`Error completing profile: ${insertError.message}`)
+    if (upsertError) {
+      alert(`Error saving profile: ${upsertError.message}`)
     } else {
-      alert('Profile completed successfully!')
+      alert('Profile saved successfully!') // Changed message to be more generic for upsert
       // Optionally redirect, e.g., router.push('/dashboard') or router.push('/')
       router.push('/')
     }
