@@ -20,7 +20,7 @@ export function AuthProvider({
   initialUser: User | null
 }) {
   const [user, setUser] = useState<User | null>(initialUser);
-  const [loading, setLoading] = useState(true); // Initialize loading state to true
+  const [loading, setLoading] = useState<boolean>(!initialUser); // Initialize based on initialUser
   const supabase = createClient();
 
   useEffect(() => {
