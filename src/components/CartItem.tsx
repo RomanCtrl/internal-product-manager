@@ -26,7 +26,7 @@ export default function CartItem({ item }: CartItemProps) {
       // or it might be an accidental clear. For now, let's allow it to be temporarily empty
       // but not update context yet, or reset to 1 if they blur.
       // For simplicity, let's just ensure it's at least 1 for context update.
-      newQuantity = Math.max(1, newQuantity || 1); 
+      newQuantity = Math.max(1, newQuantity || 1);
     }
     setCurrentQuantity(newQuantity); // Update local state immediately for responsiveness
     updateQuantity(item.id, newQuantity); // Debounce this in a real app
@@ -40,26 +40,26 @@ export default function CartItem({ item }: CartItemProps) {
   const subtotal = item.price_at_time_in_cart * currentQuantity;
 
   return (
-    <div style={{ 
-      border: '1px solid #e0e0e0', 
-      padding: '15px', 
-      marginBottom: '10px', 
-      display: 'flex', 
+    <div style={{
+      border: '1px solid #e0e0e0',
+      padding: '15px',
+      marginBottom: '10px',
+      display: 'flex',
       alignItems: 'flex-start',
       borderRadius: '8px',
       boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
     }}>
       {item.product_image && (
-        <img 
-          src={item.product_image} 
-          alt={item.product_name} 
-          style={{ 
-            width: '100px', 
-            height: '100px', 
-            marginRight: '15px', 
+        <img
+          src={item.product_image}
+          alt={item.product_name}
+          style={{
+            width: '100px',
+            height: '100px',
+            marginRight: '15px',
             objectFit: 'cover',
             borderRadius: '4px'
-          }} 
+          }}
         />
       )}
       <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
@@ -75,10 +75,10 @@ export default function CartItem({ item }: CartItemProps) {
             value={currentQuantity}
             onChange={handleQuantityChange}
             min="1"
-            style={{ 
-              width: '70px', 
-              padding: '8px', 
-              border: '1px solid #ccc', 
+            style={{
+              width: '70px',
+              padding: '8px',
+              border: '1px solid #ccc',
               borderRadius: '4px',
               textAlign: 'center'
             }}
@@ -89,14 +89,14 @@ export default function CartItem({ item }: CartItemProps) {
         <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', fontSize: '1.1em' }}>
           Subtotal: ${subtotal.toFixed(2)}
         </p>
-        <button 
-          onClick={handleRemove} 
-          style={{ 
-            background: '#ff4d4f', 
-            color: 'white', 
-            border: 'none', 
-            padding: '8px 15px', 
-            cursor: 'pointer', 
+        <button
+          onClick={handleRemove}
+          style={{
+            background: '#ff4d4f',
+            color: 'white',
+            border: 'none',
+            padding: '8px 15px',
+            cursor: 'pointer',
             borderRadius: '4px',
             fontSize: '0.9em'
           }}
