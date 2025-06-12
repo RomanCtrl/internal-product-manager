@@ -61,8 +61,11 @@ export function AuthProvider({
                 });
 
               if (insertError) {
-                console.error('CRITICAL: Error creating user profile:', JSON.stringify(insertError, null, 2));
-                effectiveUser = null; // Nullify user if profile creation fails
+                // Log the error, but do NOT nullify effectiveUser.
+                // The user is authenticated; the profile creation is a secondary step.
+                console.error('Error creating user profile automatically:', JSON.stringify(insertError, null, 2));
+                // Optionally, set a profileError state here to inform other parts of the app.
+                // For this task, we just ensure effectiveUser (auth state) is preserved.
               } else {
                 console.log('User profile created successfully for:', effectiveUser.id);
               }
@@ -71,11 +74,13 @@ export function AuthProvider({
             }
           } catch (e) {
               console.error("Unexpected error in profile ensure process:", JSON.stringify(e, null, 2));
-              effectiveUser = null; // Nullify user on unexpected error too
+              // If an unexpected error occurs in the try block, we should still preserve the auth state.
+              // Only a direct auth issue (invalid session) should clear effectiveUser.
+              // effectiveUser = null; // Avoid nullifying here as well. Let session define user.
           }
         }
 
-        setUser(effectiveUser); // Set the potentially nulled user
+        setUser(effectiveUser); // Set user based on session, regardless of profile operation outcomes.
         setLoading(false);
       }
     );
