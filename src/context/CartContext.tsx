@@ -2,7 +2,7 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/components/AuthProvider';
 
 export interface CartItem {
   id: string;
@@ -43,11 +43,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       const { data, error } = await supabase
         .from('cart_items')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
 
       if (error) {
-        console.error('Error fetching cart items:', error);
+        console.error('Error fetching cart items: Code:', error.code, 'Message:', error.message, 'Details:', error.details, 'Hint:', error.hint, 'Full Error:', JSON.stringify(error, null, 2));
       } else {
         setItems(data || []);
       }
