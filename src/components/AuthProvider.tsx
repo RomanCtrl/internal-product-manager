@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { User } from '@supabase/supabase-js'
+import { useRouter, usePathname } from 'next/navigation' // Added
 
 interface AuthContextType {
   user: User | null
@@ -22,6 +23,8 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(initialUser);
   const [loading, setLoading] = useState<boolean>(!initialUser); // Initialize based on initialUser
   const supabase = createClient();
+  const router = useRouter(); // Added
+  const pathname = usePathname(); // Added
 
   useEffect(() => {
     // setLoading(true) removed from here; initial state is true.
@@ -61,8 +64,11 @@ export function AuthProvider({
                 });
 
               if (insertError) {
-                console.error('CRITICAL: Error creating user profile:', JSON.stringify(insertError, null, 2));
-                effectiveUser = null; // Nullify user if profile creation fails
+                // Log the error, but do NOT nullify effectiveUser.
+                // The user is authenticated; the profile creation is a secondary step.
+                console.error('Error creating user profile automatically:', JSON.stringify(insertError, null, 2));
+                // Optionally, set a profileError state here to inform other parts of the app.
+                // For this task, we just ensure effectiveUser (auth state) is preserved.
               } else {
                 console.log('User profile created successfully for:', effectiveUser.id);
               }
@@ -71,11 +77,13 @@ export function AuthProvider({
             }
           } catch (e) {
               console.error("Unexpected error in profile ensure process:", JSON.stringify(e, null, 2));
-              effectiveUser = null; // Nullify user on unexpected error too
+              // If an unexpected error occurs in the try block, we should still preserve the auth state.
+              // Only a direct auth issue (invalid session) should clear effectiveUser.
+              // effectiveUser = null; // Avoid nullifying here as well. Let session define user.
           }
         }
 
-        setUser(effectiveUser); // Set the potentially nulled user
+        setUser(effectiveUser); // Set user based on session, regardless of profile operation outcomes.
         setLoading(false);
       }
     );
@@ -91,6 +99,40 @@ export function AuthProvider({
       subscription.unsubscribe();
     };
   }, [supabase]); // supabase client instance is the main dependency
+
+  // useEffect for redirecting to complete profile if necessary
+  useEffect(() => {
+    if (!loading && user) {
+      const exemptedPaths = ['/account/complete-profile', '/login', '/register'];
+      if (exemptedPaths.includes(pathname)) {
+        return;
+      }
+
+      const checkProfileAndRedirect = async () => {
+        try {
+          const { data: profile, error: fetchProfileError } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          if (fetchProfileError) {
+            console.error('Error fetching profile for redirect check:', fetchProfileError);
+            return; // Don't redirect if there's an error fetching profile
+          }
+
+          if (!profile || !profile.name) {
+            console.log('User profile incomplete, redirecting to /account/complete-profile');
+            router.push('/account/complete-profile');
+          }
+        } catch (e) {
+          console.error('Unexpected error during profile check and redirect:', e);
+        }
+      };
+
+      checkProfileAndRedirect();
+    }
+  }, [user, loading, supabase, router, pathname]);
 
   const signOut = async () => {
     setLoading(true);

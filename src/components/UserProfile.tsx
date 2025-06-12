@@ -61,7 +61,7 @@ export function UserProfile({ user, onSignOut }: UserProfileProps) {
           <p className="text-sm font-medium text-gray-900 truncate">{user?.email}</p>
         </div>
         <Link 
-          href="/profile" 
+          href="/account/settings"
           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
         >
           Profile Settings
