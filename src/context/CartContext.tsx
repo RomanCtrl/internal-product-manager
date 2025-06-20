@@ -53,7 +53,7 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
 
   // Handle specific errors or proceed to insert
   // PGRST116 = 0 rows found, which is expected if no active cart exists.
-  if (cartError && cartError.code !== 'PGRST116') {
+  if (cartError && cartError.code !== 'PGRST116') { 
     console.error('Error fetching cart initially:', JSON.stringify(cartError, null, 2));
     // For other errors (e.g., network, RLS issues not allowing select), return null.
     return null;
@@ -69,7 +69,7 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
   if (newCartError) {
     // Check if the error is due to the unique constraint (23505: unique_violation in PostgreSQL)
     // This means a concurrent operation just created the cart.
-    if (newCartError.code === '23505') {
+    if (newCartError.code === '23505') { 
       console.log('Unique constraint violation on cart insert, re-fetching active cart as it was likely created concurrently.');
       // Retry fetching the (now existing) active cart
       let { data: existingCartData, error: retryFetchError } = await supabase
@@ -78,7 +78,7 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
         .eq('user_id', userId)
         .eq('status', 'active')
         .single(); // Should find the cart created by the other process.
-
+      
       if (retryFetchError) {
         console.error('Error re-fetching cart after unique constraint violation:', JSON.stringify(retryFetchError, null, 2));
         return null;
@@ -91,7 +91,7 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
       return null;
     }
   }
-
+  
   // Return the ID of the newly created cart if insert was successful.
   return newCartData ? newCartData.id : null;
 };
@@ -100,15 +100,23 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
     const initializeCart = async () => {
       if (user) {
         setLoading(true);
-        const currentCartId = await getOrCreateCartId(user.id);
-        setCartId(currentCartId);
-        if (currentCartId) {
-          await fetchCartItems(currentCartId);
-        } else {
-          setItems([]);
+        try {
+          const currentCartId = await getOrCreateCartId(user.id);
+          setCartId(currentCartId);
+          if (currentCartId) {
+            await fetchCartItems(currentCartId);
+          } else {
+            setItems([]); // Clear items if no cart ID is found/created
+          }
+        } catch (error) {
+          console.error('Error during cart initialization:', error);
+          setItems([]); // Clear items on error
+          setCartId(null); // Reset cartId on error
+        } finally {
+          setLoading(false); // Ensure loading is always set to false
         }
-        setLoading(false);
       } else {
+        // No user, clear cart state and ensure loading is false
         setItems([]);
         setCartId(null);
         setLoading(false);
@@ -118,13 +126,16 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
   }, [user]);
 
   const fetchCartItems = async (currentCartId: string | null) => {
+    console.log(`fetchCartItems: Called with currentCartId: ${currentCartId}`);
     if (!user || !currentCartId) {
+      console.log('fetchCartItems: Returning early - no user or no currentCartId.');
       setItems([]);
-      // setLoading(false); // This might be set by initializeCart
+      // setLoading(false); // This might be set by initializeCart or the caller of fetchCartItems
       return;
     }
 
-    // setLoading(true); // Potentially set by caller
+    // setLoading(true); // Potentially set by caller if this function is used outside initializeCart
+    console.log(`fetchCartItems: Fetching items for cartId: ${currentCartId}`);
     try {
       const { data: cartItemsData, error } = await supabase
         .from('cart_items')
@@ -142,9 +153,10 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
         .eq('cart_id', currentCartId);
 
       if (error) {
-        console.error('Error fetching cart items:', error);
+        console.error('fetchCartItems: Error fetching cart items from Supabase:', JSON.stringify(error, null, 2));
         setItems([]);
       } else {
+        console.log('fetchCartItems: Successfully fetched raw cartItemsData:', JSON.stringify(cartItemsData, null, 2));
         const transformedItems: CartItem[] = cartItemsData?.map(item => ({
           id: item.id,
           product_id: item.product_id,
@@ -153,13 +165,15 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
           product_name: item.products?.name || 'Unknown Product',
           product_image: item.products?.image_url || undefined,
         })) || [];
+        console.log('fetchCartItems: Transformed items:', JSON.stringify(transformedItems, null, 2));
         setItems(transformedItems);
       }
     } catch (err) {
-      console.error('Unexpected error fetching cart items:', err);
+      console.error('fetchCartItems: Unexpected error during fetch or transformation:', err);
       setItems([]);
     } finally {
       // setLoading(false); // Potentially set by caller
+      console.log(`fetchCartItems: Finished for cartId: ${currentCartId}`);
     }
   };
 
