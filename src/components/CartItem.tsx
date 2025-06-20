@@ -13,6 +13,7 @@ export default function CartItem({ item }: CartItemProps) {
   const { updateQuantity, removeFromCart } = useCart();
   // State for quantity, initialized from item.quantity
   const [currentQuantity, setCurrentQuantity] = useState(item.quantity);
+  const [isRemoving, setIsRemoving] = useState(false); // State for remove button loading
 
   // Update currentQuantity if item.quantity changes from context (e.g. another tab)
   useEffect(() => {
@@ -32,8 +33,18 @@ export default function CartItem({ item }: CartItemProps) {
     updateQuantity(item.id, newQuantity); // Debounce this in a real app
   };
 
-  const handleRemove = () => {
-    removeFromCart(item.id);
+  const handleRemove = async () => {
+    if (isRemoving) return; // Prevent multiple clicks
+    setIsRemoving(true);
+    try {
+      await removeFromCart(item.id); // removeFromCart from context is already async
+      // Success toast is handled by CartContext's removeFromCart
+    } catch (error) {
+      console.error("Error during CartItem remove operation:", error);
+      // Error toast is handled by CartContext's removeFromCart
+    } finally {
+      setIsRemoving(false);
+    }
   };
 
   // Calculate subtotal for this item
@@ -91,17 +102,19 @@ export default function CartItem({ item }: CartItemProps) {
         </p>
         <button
           onClick={handleRemove}
+          disabled={isRemoving}
           style={{
-            background: '#ff4d4f',
-            color: 'white',
+            background: isRemoving ? '#f0f0f0' : '#ff4d4f',
+            color: isRemoving ? '#999' : 'white',
             border: 'none',
             padding: '8px 15px',
-            cursor: 'pointer',
+            cursor: isRemoving ? 'not-allowed' : 'pointer',
             borderRadius: '4px',
-            fontSize: '0.9em'
+            fontSize: '0.9em',
+            opacity: isRemoving ? 0.7 : 1,
           }}
         >
-          Remove
+          {isRemoving ? 'Removing...' : 'Remove'}
         </button>
       </div>
     </div>

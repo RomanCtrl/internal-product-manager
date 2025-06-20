@@ -1,6 +1,7 @@
 // src/context/CartContext.tsx
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import type { Database } from '@/lib/database.types'; // Import Database types
@@ -53,7 +54,7 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
 
   // Handle specific errors or proceed to insert
   // PGRST116 = 0 rows found, which is expected if no active cart exists.
-  if (cartError && cartError.code !== 'PGRST116') { 
+  if (cartError && cartError.code !== 'PGRST116') {
     console.error('Error fetching cart initially:', JSON.stringify(cartError, null, 2));
     // For other errors (e.g., network, RLS issues not allowing select), return null.
     return null;
@@ -69,7 +70,7 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
   if (newCartError) {
     // Check if the error is due to the unique constraint (23505: unique_violation in PostgreSQL)
     // This means a concurrent operation just created the cart.
-    if (newCartError.code === '23505') { 
+    if (newCartError.code === '23505') {
       console.log('Unique constraint violation on cart insert, re-fetching active cart as it was likely created concurrently.');
       // Retry fetching the (now existing) active cart
       let { data: existingCartData, error: retryFetchError } = await supabase
@@ -78,7 +79,7 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
         .eq('user_id', userId)
         .eq('status', 'active')
         .single(); // Should find the cart created by the other process.
-      
+
       if (retryFetchError) {
         console.error('Error re-fetching cart after unique constraint violation:', JSON.stringify(retryFetchError, null, 2));
         return null;
@@ -91,7 +92,7 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
       return null;
     }
   }
-  
+
   // Return the ID of the newly created cart if insert was successful.
   return newCartData ? newCartData.id : null;
 };
@@ -237,6 +238,12 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
       const existingItem = existingItems?.[0];
 
       if (existingItem) {
+        // updateQuantity already shows its own toast, so no duplicate here if it's called directly
+        // However, if updateQuantity is modified to not show toasts when called internally, add one here.
+        // For now, assuming updateQuantity handles its toast.
+        // If this addToCart call is specifically for *increasing quantity* of an existing item,
+        // and updateQuantity might be used for direct setting, a specific toast here could be:
+        // toast.success('Item quantity increased in cart!');
         await updateQuantity(existingItem.id, existingItem.quantity + quantity);
       } else {
         await supabase.from('cart_items').insert({
@@ -245,15 +252,19 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
           quantity: quantity,
           price_at_time: product.price,
         }).select().single(); // Adding select().single() can help catch insert errors better
+        toast.success(`${product.name} added to cart!`);
       }
     } catch (err) {
       console.error('Error in addToCart:', err);
+      toast.error('Failed to add item to cart.');
     }
   };
 
   const updateQuantity = async (cartItemId: string, quantity: number) => {
     if (!user || !cartId || quantity < 1) {
       console.error("Attempted to updateQuantity when user or cartId is not available, or quantity invalid. User:", !!user, "CartId:", !!cartId, "Quantity:", quantity, "Context loading:", loading);
+      // Optionally, show a toast for invalid quantity if it's a direct user action.
+      // if (quantity < 1) toast.error("Quantity must be at least 1.");
       return;
     }
     try {
@@ -262,24 +273,40 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
         .update({ quantity, updated_at: new Date().toISOString() })
         .eq('id', cartItemId)
         .eq('cart_id', cartId);
+      toast.success('Item quantity updated!');
     } catch (err) {
       console.error('Error in updateQuantity:', err);
+      toast.error('Failed to update quantity.');
     }
   };
 
   const removeFromCart = async (cartItemId: string) => {
     if (!user || !cartId) {
       console.error("Attempted to removeFromCart when user or cartId is not available. User:", !!user, "CartId:", !!cartId, "Context loading:", loading);
+      // Optional: toast.error('Cannot remove item: User or cart information is missing.');
       return;
     }
     try {
-      await supabase
+      const { error } = await supabase
         .from('cart_items')
         .delete()
         .eq('id', cartItemId)
         .eq('cart_id', cartId);
-    } catch (err) {
+
+      if (error) {
+        // This will ensure that Supabase errors are caught by the catch block below
+        throw error;
+      }
+
+      toast.success('Item removed from cart.');
+
+      // Manually call fetchCartItems to refresh UI after delete
+      console.log('removeFromCart: Manually calling fetchCartItems to refresh UI after delete.');
+      await fetchCartItems(cartId);
+
+    } catch (err: any) {
       console.error('Error in removeFromCart:', err);
+      toast.error(`Failed to remove item: ${err.message || 'An unexpected error occurred.'}`);
     }
   };
 
@@ -381,17 +408,34 @@ const getOrCreateCartId = async (userId: string): Promise<string | null> => {
       if (updateCartError) {
         console.error('Error updating cart status to completed:', updateCartError);
         // This is not a fatal error for the order itself, but good to log.
+        // Optionally, a toast for this non-fatal error if user needs to know.
+        // toast.warning("Could not finalize previous cart status, but order is placed.");
       }
       setCartId(null); // User will get a new cart next time they add an item.
 
+      toast.success(`Order #${order_number} placed successfully!`);
       return newOrderId;
     } catch (error) {
       console.error("Checkout process failed:", error);
-      // Alert is handled by specific error messages above for better UX
-      // If it's an unexpected error, this will catch it.
-      if (!(error instanceof Error && error.message.includes("Order creation failed") || error.message.includes("Error creating order items"))) {
-        alert("An unexpected error occurred during checkout. Please try again.");
+      // Existing alerts provide specific feedback. A general toast can also be added.
+      if (!(error instanceof Error && (error.message.includes("Order creation failed") || error.message.includes("Error creating order items")))) {
+        // This condition means the error was not one of the specific ones already alerted.
+        toast.error("An unexpected error occurred during checkout. Please try again.");
+      } else {
+        // If it was one of the alerted errors, a toast might be redundant or could be more general.
+        // For example, toast.error("Checkout failed. See alert for details.");
+        // For now, relying on existing alerts for specific DB errors.
       }
+      // The existing alerts are quite user-facing. toast.error can be for more generic fallback.
+      // No, the logic is: if it's NOT one of the specific errors, then show the generic alert.
+      // So the toast should be for the specific errors if we want to replace the alerts.
+      // Let's keep the alerts for now as they are specific, and add a generic toast if one of those wasn't hit.
+      // The prompt was to add toast.error in catch blocks.
+      // The existing alerts are effectively user-facing error messages.
+      // Let's ensure a toast.error is shown if the error is NOT one of the specific ones handled by alerts.
+      // Or, more simply, always show a generic toast.error, and let alerts provide more detail.
+      // For this iteration, let's add a general toast for any error caught here.
+      toast.error('Order placement failed. Please review alerts or try again.');
       return null;
     } finally {
       setCheckoutLoading(false);
