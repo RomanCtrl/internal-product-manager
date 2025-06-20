@@ -9,12 +9,22 @@ export default function ProductCard({ product }: { product: Product }) {
   const { addToCart, loading: isCartLoading } = useCart();
   // Initialize quantity state with product.step or 1
   const [quantity, setQuantity] = useState(product.step || 1);
+  const [isAdding, setIsAdding] = useState(false); // Local loading state for adding to cart
 
-  const handleAddToCart = () => {
-    // Pass the full 'product' object, as addToCart expects Database['public']['Tables']['products']['Row']
-    addToCart(product, quantity);
-    // Optionally, add some user feedback here, like a console.log or a toast notification
-    console.log(`${quantity} of ${product.name} added to cart`);
+  const handleAddToCart = async () => {
+    if (isAdding) return; // Prevent multiple clicks while processing
+    setIsAdding(true);
+    try {
+      // Pass the full 'product' object, as addToCart expects Database['public']['Tables']['products']['Row']
+      await addToCart(product, quantity); // addToCart from context is async
+      console.log(`${quantity} of ${product.name} added to cart`);
+      // TODO: Future: Implement success toast notification
+    } catch (error) {
+      console.error("Failed to add item to cart:", error);
+      // TODO: Future: Implement error toast notification
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   // Handler for quantity input change
@@ -67,10 +77,10 @@ export default function ProductCard({ product }: { product: Product }) {
       </div>
       <button
         onClick={handleAddToCart}
-        className={`mt-4 w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors ${isCartLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-        disabled={isCartLoading}
+        className={`mt-4 w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors ${(isCartLoading || isAdding) ? 'opacity-50 cursor-not-allowed' : ''}`}
+        disabled={isCartLoading || isAdding}
       >
-        {isCartLoading ? 'Initializing Cart...' : 'Add to Cart'}
+        {isAdding ? 'Adding...' : (isCartLoading ? 'Initializing Cart...' : 'Add to Cart')}
       </button>
     </div>
   )

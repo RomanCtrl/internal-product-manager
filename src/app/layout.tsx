@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import { createClient } from '@/lib/supabase/server'
 import { AuthProvider } from '@/components/AuthProvider'
 import { CartProvider } from '@/context/CartContext';
+import { Toaster } from 'sonner';
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -23,6 +24,7 @@ export default async function RootLayout({
         <AuthProvider initialUser={user}>
           <CartProvider>
             {children}
+            <Toaster />
           </CartProvider>
         </AuthProvider>
       </body>
